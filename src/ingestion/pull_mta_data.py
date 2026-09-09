@@ -4,6 +4,15 @@ import csv
 from pathlib import Path
 
 def bucket_rows_by_date(data):
+    """
+    Organize JSON data into "buckets" labelled by date.
+
+    Args:
+        data: List of dictionaries where each dictionary represents a row in the dataset.
+
+    Returns:
+        grouped_by_date: Dictionary of lists where each member list contains dictionaries (rows) that have the same date label.
+    """
     grouped_by_date = {}
 
     for row in data:
@@ -19,6 +28,17 @@ def bucket_rows_by_date(data):
 
 
 def append_to_partition(date_string, rows, output_directory):
+    """
+    Writes data that is organized by date and stored in a Python dictionary to a CSV file.
+
+    Args:
+        date_string: The specific date for the passed in rows (see "rows" argument).
+        rows: List of dictionaries where each dictionary has the same date column and represents a row in the dataset.
+        output_directory: Where to write the data to.
+
+    Returns:
+        file_path: File path (string) to the CSV file that was written to.
+    """
     file_path = Path(output_directory)
     file_path = file_path / f"dt={date_string}" / "ridership.csv"
     file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -36,11 +56,21 @@ def append_to_partition(date_string, rows, output_directory):
     
     return file_path
 
-"""
-I get the number of riders at a certain station for a certain fare type every hour.
-"""
-
 def get_data(start_date, end_date, output_directory):
+    """
+    Download CSV data files within a specific date range to a specified directory.
+
+    Args:
+        start_date: Start date of data to fetch.
+        end_date: End date of data to fetch.
+        output_directory: Directory (relative to root) to download fetched data.
+
+    Returns:
+        destination: String representing the directory where the data was loaded.
+
+    Raises:
+        RuntimeError: When requests to the constructed URL fail 3 retries.
+    """
     offset = 0
     limit = 50_000
     where_clause = f"transit_timestamp between '{start_date}' and '{end_date}'"
@@ -70,7 +100,7 @@ def get_data(start_date, end_date, output_directory):
         grouped_by_date = bucket_rows_by_date(data)
 
         for date in grouped_by_date:
-            directory_string = append_to_partition(date, grouped_by_date[date], output_directory)
+            csv_destination = append_to_partition(date, grouped_by_date[date], output_directory) # Log potential
 
         offset += len(data)
 
