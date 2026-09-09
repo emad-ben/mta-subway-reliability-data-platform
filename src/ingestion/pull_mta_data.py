@@ -1,7 +1,15 @@
 import requests
 import time
 import csv
+import logging
 from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s, [%(levelname)s], %(message)s"
+)
+
+logger = logging.getLogger(__name__)
 
 def bucket_rows_by_date(data):
     """
@@ -71,9 +79,12 @@ def get_data(start_date, end_date, output_directory):
     Raises:
         RuntimeError: When requests to the constructed URL fail 3 retries.
     """
+    start = time.time()
+
     offset = 0
     limit = 50_000
     where_clause = f"transit_timestamp between '{start_date}' and '{end_date}'"
+    total_row_count = 0
 
     response_empty = False
     while not response_empty:
@@ -82,27 +93,36 @@ def get_data(start_date, end_date, output_directory):
         max_retries = 3
         for attempt in range(max_retries):
             try:
+                logger.info(f"Requesting at offset {offset} from {url}")
                 response = requests.get(url, timeout=60)
                 break
             except requests.exceptions.RequestException as error:
+                logger.warning(f"Failed request attempt {attempt} at offset {offset} from {url} - {error}")
                 if (attempt == max_retries - 1):
-                    raise RuntimeError(f"Failed request after {max_retries} attempts at offset {offset}") from error
+                    raise RuntimeError(f"Failed request after {max_retries} attempts at offset {offset} from {url} - {error}") from error
                 time.sleep(2)
                 continue
 
         data = response.json()
-        print(len(data))
 
         if not data:
             response_empty = True
             break
 
+        total_row_count += len(data)
+        logger.info(f"{len(data)} rows fetched at offset {offset}")
         grouped_by_date = bucket_rows_by_date(data)
 
         for date in grouped_by_date:
             csv_destination = append_to_partition(date, grouped_by_date[date], output_directory) # Log potential
 
         offset += len(data)
+
+    logger.info(f"Total rows loaded: {total_row_count}")
+    elapsed_minutes = (time.time() - start) / 60
+    logger.info(f"Elapsed minutes: {elapsed_minutes:.2f} minutes")
+
+    return output_directory
 
 if __name__ == "__main__":
     get_data(
